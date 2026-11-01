@@ -1,0 +1,11 @@
+[project]
+name = "vision-exercise"
+version = "0.1.0"
+description = "Identifica exercícios físicos (flexão e agachamento) e conta repetições usando visão computacional."
+readme = "README.md"
+requires-python = ">=3.10"
+dependencies = [
+    "opencv-python>=4.8",
+    "mediapipe>=0.10",
+    "numpy>=1.26",
+]
