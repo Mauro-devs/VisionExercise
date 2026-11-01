@@ -33,7 +33,7 @@ def validar_pose_landmarker() -> str:
 
 if __name__ == "__main__":
 
-    video_path = "videos/TestePessoaFora.mp4"
+    video_path = "videos/FlexaoVideo.mp4"
     cap = cv2.VideoCapture(video_path)
 
     if not validar_video_aberto(cap=cap):
@@ -46,6 +46,7 @@ if __name__ == "__main__":
     PoseLandmarker = mp.tasks.vision.PoseLandmarker
     PoseLandmarkerOptions = mp.tasks.vision.PoseLandmarkerOptions
     RunningMode = mp.tasks.vision.RunningMode
+    PoseLandmarksconnections = mp.tasks.vision.PoseLandmarksConnections
 
     opcoes = PoseLandmarkerOptions(
         base_options = BaseOptions(model_asset_path=caminho_modelo),
@@ -83,10 +84,19 @@ if __name__ == "__main__":
             if resultado.pose_landmarks:
                 pessoa = resultado.pose_landmarks[0]
 
+                pontos_px = []
+
                 for ponto in pessoa:
                     px = int(ponto.x * largura)
                     py = int(ponto.y * altura)
+                    pontos_px.append((px, py))
 
+                for conexao in PoseLandmarksconnections.POSE_LANDMARKS:
+                    inicio = pontos_px[conexao.start]
+                    fim = pontos_px[conexao.end]
+                    cv2.line(frame,inicio, fim, (0, 255, 0), 2)
+
+                for px, py in pontos_px:
                     cv2.circle(frame, (px, py), 5, (0, 255, 0), -1)
             else:
                 cv2.putText(frame, "Pessoa nao detectada", (20, 40), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 0, 255), 2)
