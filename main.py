@@ -9,9 +9,11 @@ from src.angulos import calcular_angulo, escolher_lado
 from src.desenho import (
     desenhar_angulo,
     desenhar_aviso,
+    desenhar_contador,
     desenhar_esqueleto,
     landmarks_p_pixels,
 )
+from src.exercicios import Agachamento
 
 
 def validar_video_aberto(cap) -> bool:
@@ -62,6 +64,7 @@ if __name__ == "__main__":
 
     with PoseLandmarker.create_from_options(opcoes) as landmarker:
 
+        agachamento = Agachamento()
         fps = cap.get(cv2.CAP_PROP_FPS)
         indice_do_quadro = 0
 
@@ -101,7 +104,8 @@ if __name__ == "__main__":
 
                 if angulo_encontrado is not None:
                     desenhar_angulo(frame, pontos_px[joelho], angulo_encontrado)
-                
+                    agachamento.atualizar(angulo_encontrado)
+                    desenhar_contador(frame, agachamento.contador)
             else:
                 desenhar_aviso(frame, "Pessoa nao detectada!!")
 

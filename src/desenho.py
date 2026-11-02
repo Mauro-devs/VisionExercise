@@ -11,6 +11,23 @@ COR_TEXTO_ANGULO = (255, 255, 255)
 ESPESSURA_LINHA = 2
 RAIO_PONTO = 5
 
+FONTE = cv2.FONT_HERSHEY_SIMPLEX
+LADO_REFERENCIA = 832
+ESCALA_REFERENCIA = 0.7
+ESCALA_MINIMA = 0.5
+MARGEM_PROPORCIONAL = 0.03
+
+
+def _parametros_texto(frame):
+    altura, largura, _ = frame.shape
+    lado_maior = max(altura, largura)
+
+    escala = max(ESCALA_MINIMA, lado_maior / LADO_REFERENCIA * ESCALA_REFERENCIA)
+    espessura = max(1, round(escala * 2.5))
+    margem = int(largura * MARGEM_PROPORCIONAL)
+
+    return escala, espessura, margem
+
 
 def landmarks_p_pixels(pessoa, largura, altura):
     pontos_px = []
@@ -33,9 +50,37 @@ def desenhar_esqueleto(frame, pontos_px):
 
 
 def desenhar_aviso(frame, texto):
-    cv2.putText(frame, texto, (20, 40), cv2.FONT_HERSHEY_SIMPLEX, 0.7, COR_AVISO, 2)
+    escala, espessura, margem = _parametros_texto(frame)
+    (_, altura_texto), _ = cv2.getTextSize(texto, FONTE, escala, espessura)
+
+    x = margem
+    y = altura_texto + margem
+
+    cv2.putText(frame, texto, (x, y), FONTE, escala, COR_AVISO, espessura)
 
 
 def desenhar_angulo(frame, pontopx, angulo):
-    cv2.putText(frame, f"Angulo: {angulo:.0f}", pontopx, cv2.FONT_HERSHEY_SIMPLEX, 0.7, COR_TEXTO_ANGULO, 2)
-    
+    altura, largura, _ = frame.shape
+    escala, espessura, margem = _parametros_texto(frame)
+
+    texto = f"Angulo: {angulo:.0f}"
+    (largura_texto, altura_texto), _ = cv2.getTextSize(texto, FONTE, escala, espessura)
+
+    px, py = pontopx
+    x = max(margem, min(px, largura - largura_texto - margem))
+    y = max(altura_texto + margem, min(py, altura - margem))
+
+    cv2.putText(frame, texto, (x, y), FONTE, escala, COR_TEXTO_ANGULO, espessura)
+
+
+def desenhar_contador(frame, repeticoes):
+    _, largura, _ = frame.shape
+    escala, espessura, margem = _parametros_texto(frame)
+
+    texto = f"Repeticoes: {repeticoes}"
+    (largura_texto, altura_texto), _ = cv2.getTextSize(texto, FONTE, escala, espessura)
+
+    x = largura - largura_texto - margem
+    y = altura_texto + margem
+
+    cv2.putText(frame, texto, (x, y), FONTE, escala, COR_LINHA, espessura)
