@@ -5,6 +5,14 @@ import cv2
 import mediapipe as mp
 from loguru import logger
 
+from src.angulos import calcular_angulo, escolher_lado
+from src.desenho import (
+    desenhar_angulo,
+    desenhar_aviso,
+    desenhar_esqueleto,
+    landmarks_p_pixels,
+)
+
 
 def validar_video_aberto(cap) -> bool:
 
@@ -33,7 +41,7 @@ def validar_pose_landmarker() -> str:
 
 if __name__ == "__main__":
 
-    video_path = "videos/FlexaoVideo.mp4"
+    video_path = "videos/AgachamentoVideo.mp4"
     cap = cv2.VideoCapture(video_path)
 
     if not validar_video_aberto(cap=cap):
@@ -46,7 +54,6 @@ if __name__ == "__main__":
     PoseLandmarker = mp.tasks.vision.PoseLandmarker
     PoseLandmarkerOptions = mp.tasks.vision.PoseLandmarkerOptions
     RunningMode = mp.tasks.vision.RunningMode
-    PoseLandmarksconnections = mp.tasks.vision.PoseLandmarksConnections
 
     opcoes = PoseLandmarkerOptions(
         base_options = BaseOptions(model_asset_path=caminho_modelo),
@@ -76,30 +83,27 @@ if __name__ == "__main__":
 
             resultado = landmarker.detect_for_video(imagem_np, timestamp)
 
-            logger.info(f"Quadro {indice_do_quadro}: {len(resultado.pose_landmarks)} pessoas")
-
+            #Caso seja necessário acompanhar a identificacão pelos quadros descomente esse trecho:
+            #logger.debug(f"Quadro {indice_do_quadro}: {len(resultado.pose_landmarks)} pessoas")
 
             altura, largura, _ = frame.shape
 
             if resultado.pose_landmarks:
+
                 pessoa = resultado.pose_landmarks[0]
+                pontos_px = landmarks_p_pixels(pessoa, largura, altura)
+                
+                quadril, joelho, tornozelo = escolher_lado(pessoa, (23, 25, 27), (24, 26, 28))
 
-                pontos_px = []
+                angulo_encontrado = calcular_angulo(pontos_px[quadril], pontos_px[joelho], pontos_px[tornozelo])
 
-                for ponto in pessoa:
-                    px = int(ponto.x * largura)
-                    py = int(ponto.y * altura)
-                    pontos_px.append((px, py))
+                desenhar_esqueleto(frame, pontos_px)
 
-                for conexao in PoseLandmarksconnections.POSE_LANDMARKS:
-                    inicio = pontos_px[conexao.start]
-                    fim = pontos_px[conexao.end]
-                    cv2.line(frame,inicio, fim, (0, 255, 0), 2)
-
-                for px, py in pontos_px:
-                    cv2.circle(frame, (px, py), 5, (0, 255, 0), -1)
+                if angulo_encontrado is not None:
+                    desenhar_angulo(frame, pontos_px[joelho], angulo_encontrado)
+                
             else:
-                cv2.putText(frame, "Pessoa nao detectada", (20, 40), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 0, 255), 2)
+                desenhar_aviso(frame, "Pessoa nao detectada!!")
 
             cv2.imshow("QuadroAtual", frame)
 
