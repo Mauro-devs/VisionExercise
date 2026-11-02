@@ -6,6 +6,7 @@ PoseLandmarksConnections = mp.tasks.vision.PoseLandmarksConnections
 COR_LINHA = (0, 255, 0)
 COR_PONTO = (0, 255, 0)
 COR_AVISO = (0, 0, 255)
+COR_TEXTO_ANGULO = (255, 255, 255)
 
 ESPESSURA_LINHA = 2
 RAIO_PONTO = 5
@@ -33,4 +34,8 @@ def desenhar_esqueleto(frame, pontos_px):
 
 def desenhar_aviso(frame, texto):
     cv2.putText(frame, texto, (20, 40), cv2.FONT_HERSHEY_SIMPLEX, 0.7, COR_AVISO, 2)
+
+
+def desenhar_angulo(frame, pontopx, angulo):
+    cv2.putText(frame, f"Angulo: {angulo:.0f}", pontopx, cv2.FONT_HERSHEY_SIMPLEX, 0.7, COR_TEXTO_ANGULO, 2)
     

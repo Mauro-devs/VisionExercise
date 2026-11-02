@@ -25,3 +25,16 @@ def calcular_angulo(a, b, c):
 
     #Transformar de cosseno para angulo
     return float(np.degrees(np.arccos(cosseno)))
+
+
+
+def escolher_lado(pessoa, pontos_esq, pontos_dir):
+
+    visibilidade_esq = np.mean([pessoa[i].visibility for i in pontos_esq])
+    visibilidade_dir = np.mean([pessoa[i].visibility for i in pontos_dir])
+
+    if visibilidade_esq > visibilidade_dir:
+        return pontos_esq
+
+    return pontos_dir
+

@@ -5,7 +5,13 @@ import cv2
 import mediapipe as mp
 from loguru import logger
 
-from src.desenho import desenhar_aviso, desenhar_esqueleto, landmarks_p_pixels
+from src.angulos import calcular_angulo, escolher_lado
+from src.desenho import (
+    desenhar_angulo,
+    desenhar_aviso,
+    desenhar_esqueleto,
+    landmarks_p_pixels,
+)
 
 
 def validar_video_aberto(cap) -> bool:
@@ -35,7 +41,7 @@ def validar_pose_landmarker() -> str:
 
 if __name__ == "__main__":
 
-    video_path = "videos/FlexaoVideo.mp4"
+    video_path = "videos/AgachamentoVideo.mp4"
     cap = cv2.VideoCapture(video_path)
 
     if not validar_video_aberto(cap=cap):
@@ -83,8 +89,18 @@ if __name__ == "__main__":
             altura, largura, _ = frame.shape
 
             if resultado.pose_landmarks:
-                pontos_px = landmarks_p_pixels(resultado.pose_landmarks[0], largura, altura)
+
+                pessoa = resultado.pose_landmarks[0]
+                pontos_px = landmarks_p_pixels(pessoa, largura, altura)
+                
+                quadril, joelho, tornozelo = escolher_lado(pessoa, (23, 25, 27), (24, 26, 28))
+
+                angulo_encontrado = calcular_angulo(pontos_px[quadril], pontos_px[joelho], pontos_px[tornozelo])
+
                 desenhar_esqueleto(frame, pontos_px)
+
+                if angulo_encontrado is not None:
+                    desenhar_angulo(frame, pontos_px[joelho], angulo_encontrado)
                 
             else:
                 desenhar_aviso(frame, "Pessoa nao detectada!!")
