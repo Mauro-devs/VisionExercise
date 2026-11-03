@@ -1,9 +1,14 @@
 # Execução (a partir da raiz do projeto):
-#   uv run python main.py
+#   uv run python main.py                                          (webcam de índice 0)
+#   uv run python main.py --fonte 1                                (outra webcam)
+#   uv run python main.py --fonte videos/AgachamentoVideo.mp4 --exercicio agachamento
+# Uso: faça o gesto para escolher o exercício (1 dedo = agachamento, 2 dedos = flexão), afaste-se e comece.
+# Teclas: B troca o exercício, Q sai (a janela do vídeo precisa estar em foco).
 # Modelos: Pose Landmarker (lite) e Gesture Recognizer, do Google MediaPipe, baixados na primeira execução.
-
+import argparse
 import math
 import pathlib
+import time
 from urllib import request
 
 import cv2
@@ -27,9 +32,38 @@ URL_GESTOS = "https://storage.googleapis.com/mediapipe-models/gesture_recognizer
 
 TEMPO_POSICIONAMENTO_S = 5
 
-# Para pular a escolha por gesto durante os testes, use "agachamento" ou "flexao". Em uso normal, deixe None.
-EXERCICIO_FIXO = None
+PREFIXOS_REDE = ("http://", "https://", "rtsp://")
 
+
+def ler_args():
+
+    parser = argparse.ArgumentParser(description="Identifica o exercicio (agachamento ou flexao) e conta as repeticoes por visao computacional.")
+
+    parser.add_argument("--fonte", default="0",
+                        help="Indice da webcam (ex.: 0), endereco de rede (ex.: http://IP:8080/video) ou caminho de um video. Padrao: 0")
+    parser.add_argument("--exercicio", choices=list(EXERCICIOS), default=None,
+                        help="Pula a escolha por gesto e ja comeca neste exercicio")
+    parser.add_argument("--sem-espelho", action="store_true",
+                        help="Nao espelha a imagem de camera (por padrao, camera e espelhada)")
+
+    return parser.parse_args()
+
+
+def abrir_fonte(fonte):
+
+    # Camera local (so digitos, ex.: "0") e endereco de rede (http, rtsp) sao fontes "ao vivo"
+    ao_vivo = fonte.isdigit() or fonte.lower().startswith(PREFIXOS_REDE)
+
+    if fonte.isdigit():
+        cap = cv2.VideoCapture(int(fonte))
+    else:
+        cap = cv2.VideoCapture(fonte)
+
+    if ao_vivo:
+        # Guarda so o quadro mais recente, para a imagem nao ficar atrasada em relacao a pessoa
+        cap.set(cv2.CAP_PROP_BUFFERSIZE, 1)
+
+    return cap, ao_vivo
 
 def validar_video_aberto(cap) -> bool:
 
@@ -103,11 +137,14 @@ def processar_pose(landmarker, imagem_np, timestamp, frame, sessao, exibir_resul
 
 if __name__ == "__main__":
 
-    video_path = "videos/VideoIndicador.mp4"
-    cap = cv2.VideoCapture(video_path)
+    argumentos = ler_args()
+    cap, ao_vivo = abrir_fonte(argumentos.fonte)
 
     if not validar_video_aberto(cap=cap):
-        raise Exception("Erro ao abrir video")
+        raise SystemExit(f"Nao foi possivel abrir a fonte '{argumentos.fonte}'.\n"
+                         "- Webcam: confira se ela esta conectada e nao esta em uso por outro programa; "
+                         "se houver mais de uma, tente --fonte 1.\n"
+                         "- Video: passe o caminho do arquivo, ex.: --fonte videos/AgachamentoVideo.mp4.")
 
 
     caminho_modelo_pose = garantir_modelo("pose_landmarker_lite.task", URL_POSE)
@@ -134,9 +171,9 @@ if __name__ == "__main__":
     with PoseLandmarker.create_from_options(opcoes_pose) as landmarker, \
          GestureRecognizer.create_from_options(opcoes_gestos) as reconhecedor:
 
-        if EXERCICIO_FIXO:
+        if argumentos.exercicio:
             modo = "exercicio"
-            sessao = SessaoExercicio(EXERCICIOS[EXERCICIO_FIXO])
+            sessao = SessaoExercicio(EXERCICIOS[argumentos.exercicio])
         else:
             modo = "escolha"
             sessao = None
@@ -144,8 +181,11 @@ if __name__ == "__main__":
         confirmador = ConfirmadorGesto()
         inicio_posicionamento_ms = None
 
-        fps = cap.get(cv2.CAP_PROP_FPS)
+        fps = cap.get(cv2.CAP_PROP_FPS) or 30
         indice_do_quadro = 0
+        inicio_relogio = time.monotonic()
+        ultimo_timestamp = -1
+        espelhar = ao_vivo and not argumentos.sem_espelho
 
         while True:
 
@@ -155,13 +195,24 @@ if __name__ == "__main__":
             ret, frame = cap.read()
 
             if not ret:
+                if ao_vivo:
+                    logger.warning("A camera parou de enviar imagem")
                 break
+
+            if espelhar:
+                frame = cv2.flip(frame, 1)
 
             imagem = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
 
             imagem_np = mp.Image(image_format=mp.ImageFormat.SRGB, data=imagem)
 
-            timestamp = int(indice_do_quadro *1000 / fps)
+            if ao_vivo:
+                timestamp = int((time.monotonic() - inicio_relogio) * 1000)
+            else:
+                timestamp = int(indice_do_quadro * 1000 / fps)
+
+            timestamp = max(timestamp, ultimo_timestamp + 1)
+            ultimo_timestamp = timestamp
 
             if modo == "escolha":
 

@@ -14,7 +14,7 @@ class Exercicio:
 
 EXERCICIOS = {
     "agachamento": Exercicio("agachamento", (23, 25, 27), (24, 26, 28), 100, 160),
-    "flexao": Exercicio("flexao", (11, 13, 15), (12, 14, 16), 100, 150),
+    "flexao": Exercicio("flexao", (11, 13, 15), (12, 14, 16), 110, 150),
 }
 
 
