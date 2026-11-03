@@ -7,6 +7,7 @@ COR_LINHA = (0, 255, 0)
 COR_PONTO = (0, 255, 0)
 COR_AVISO = (0, 0, 255)
 COR_TEXTO_ANGULO = (255, 255, 255)
+COR_CONTORNO = (0, 0, 0)
 
 ESPESSURA_LINHA = 2
 RAIO_PONTO = 5
@@ -27,6 +28,18 @@ def _parametros_texto(frame):
     margem = int(largura * MARGEM_PROPORCIONAL)
 
     return escala, espessura, margem
+
+
+def _escrever_texto(frame, texto, posicao, escala, cor, espessura):
+    x, y = posicao
+    deslocamento = max(2, round(escala * 2.5))
+
+    for dx in (-deslocamento, 0, deslocamento):
+        for dy in (-deslocamento, 0, deslocamento):
+            if dx or dy:
+                cv2.putText(frame, texto, (x + dx, y + dy), FONTE, escala, COR_CONTORNO, espessura, cv2.LINE_AA)
+
+    cv2.putText(frame, texto, posicao, FONTE, escala, cor, espessura, cv2.LINE_AA)
 
 
 def landmarks_p_pixels(pessoa, largura, altura):
@@ -56,7 +69,7 @@ def desenhar_aviso(frame, texto):
     x = margem
     y = altura_texto + margem
 
-    cv2.putText(frame, texto, (x, y), FONTE, escala, COR_AVISO, espessura)
+    _escrever_texto(frame, texto, (x, y), escala, COR_AVISO, espessura)
 
 
 def desenhar_angulo(frame, pontopx, angulo):
@@ -70,7 +83,7 @@ def desenhar_angulo(frame, pontopx, angulo):
     x = max(margem, min(px, largura - largura_texto - margem))
     y = max(altura_texto + margem, min(py, altura - margem))
 
-    cv2.putText(frame, texto, (x, y), FONTE, escala, COR_TEXTO_ANGULO, espessura)
+    _escrever_texto(frame, texto, (x, y), escala, COR_TEXTO_ANGULO, espessura)
 
 
 def desenhar_contador(frame, repeticoes):
@@ -83,7 +96,7 @@ def desenhar_contador(frame, repeticoes):
     x = largura - largura_texto - margem
     y = altura_texto + margem
 
-    cv2.putText(frame, texto, (x, y), FONTE, escala, COR_LINHA, espessura)
+    _escrever_texto(frame, texto, (x, y), escala, COR_LINHA, espessura)
 
 
 def desenhar_texto_centralizado(frame, texto, posicao_vertical, cor=COR_TEXTO_ANGULO, escala_relativa=1.0):
@@ -98,4 +111,4 @@ def desenhar_texto_centralizado(frame, texto, posicao_vertical, cor=COR_TEXTO_AN
     x = max(0, (largura - largura_texto) // 2)
     y = int(altura * posicao_vertical)
 
-    cv2.putText(frame, texto, (x, y), FONTE, escala, cor, espessura)
+    _escrever_texto(frame, texto, (x, y), escala, cor, espessura)
