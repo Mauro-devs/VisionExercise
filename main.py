@@ -9,9 +9,11 @@ from src.angulos import calcular_angulo, escolher_lado
 from src.desenho import (
     desenhar_angulo,
     desenhar_aviso,
+    desenhar_contador,
     desenhar_esqueleto,
     landmarks_p_pixels,
 )
+from src.exercicios import EXERCICIOS, ContadorRepeticoes
 
 
 def validar_video_aberto(cap) -> bool:
@@ -41,7 +43,8 @@ def validar_pose_landmarker() -> str:
 
 if __name__ == "__main__":
 
-    video_path = "videos/AgachamentoVideo.mp4"
+    video_path = "videos/FlexaoVideo.mp4"
+    exercicio = EXERCICIOS["flexao"]
     cap = cv2.VideoCapture(video_path)
 
     if not validar_video_aberto(cap=cap):
@@ -62,6 +65,7 @@ if __name__ == "__main__":
 
     with PoseLandmarker.create_from_options(opcoes) as landmarker:
 
+        contador = ContadorRepeticoes(exercicio.limiar_baixo, exercicio.limiar_alto)
         fps = cap.get(cv2.CAP_PROP_FPS)
         indice_do_quadro = 0
 
@@ -93,15 +97,16 @@ if __name__ == "__main__":
                 pessoa = resultado.pose_landmarks[0]
                 pontos_px = landmarks_p_pixels(pessoa, largura, altura)
                 
-                quadril, joelho, tornozelo = escolher_lado(pessoa, (23, 25, 27), (24, 26, 28))
+                inicio, articulacao, fim = escolher_lado(pessoa, exercicio.pontos_esq, exercicio.pontos_dir)
 
-                angulo_encontrado = calcular_angulo(pontos_px[quadril], pontos_px[joelho], pontos_px[tornozelo])
+                angulo_encontrado = calcular_angulo(pontos_px[inicio], pontos_px[articulacao], pontos_px[fim])
 
                 desenhar_esqueleto(frame, pontos_px)
 
                 if angulo_encontrado is not None:
-                    desenhar_angulo(frame, pontos_px[joelho], angulo_encontrado)
-                
+                    desenhar_angulo(frame, pontos_px[articulacao], angulo_encontrado)
+                    contador.atualizar(angulo_encontrado)
+                    desenhar_contador(frame, contador.contador)
             else:
                 desenhar_aviso(frame, "Pessoa nao detectada!!")
 
