@@ -1,3 +1,8 @@
+# Execução (a partir da raiz do projeto):
+#   uv run python main.py
+# Modelos: Pose Landmarker (lite) e Gesture Recognizer, do Google MediaPipe, baixados na primeira execução.
+
+import math
 import pathlib
 from urllib import request
 
@@ -11,9 +16,19 @@ from src.desenho import (
     desenhar_aviso,
     desenhar_contador,
     desenhar_esqueleto,
+    desenhar_texto_centralizado,
     landmarks_p_pixels,
 )
 from src.exercicios import EXERCICIOS, ContadorRepeticoes
+from src.gestos import GESTOS_EXERCICIOS, ConfirmadorGesto, extrair_gesto
+
+URL_POSE = "https://storage.googleapis.com/mediapipe-models/pose_landmarker/pose_landmarker_lite/float16/1/pose_landmarker_lite.task"
+URL_GESTOS = "https://storage.googleapis.com/mediapipe-models/gesture_recognizer/gesture_recognizer/float16/1/gesture_recognizer.task"
+
+TEMPO_POSICIONAMENTO_S = 5
+
+# Para pular a escolha por gesto durante os testes, use "agachamento" ou "flexao". Em uso normal, deixe None.
+EXERCICIO_FIXO = None
 
 
 def validar_video_aberto(cap) -> bool:
@@ -25,47 +40,97 @@ def validar_video_aberto(cap) -> bool:
     logger.info("Video acessado corretamente")
     return True
 
-def validar_pose_landmarker() -> str:
+def garantir_modelo(nome_arquivo, url) -> str:
 
-    caminho_modelo = pathlib.Path("models/pose_landmarker_lite.task")
+    caminho_modelo = pathlib.Path("models") / nome_arquivo
 
     if not caminho_modelo.exists():
 
         caminho_modelo.parent.mkdir(parents=True, exist_ok=True)
 
-        request.urlretrieve("https://storage.googleapis.com/mediapipe-models/pose_landmarker/pose_landmarker_lite/float16/1/pose_landmarker_lite.task", caminho_modelo)
+        logger.info(f"Baixando o modelo {nome_arquivo}...")
+        request.urlretrieve(url, caminho_modelo)
 
-        logger.info("Modelo importado com sucesso!")
+        logger.info(f"Modelo {nome_arquivo} importado com sucesso!")
     else:
-        logger.info("Modelo já importado anteriormente, não necessário nova importacão")
-        
+        logger.info(f"Modelo {nome_arquivo} já importado anteriormente, não necessário nova importacão")
+
     return str(caminho_modelo)
+
+def processar_pose(landmarker, imagem_np, timestamp, frame, exercicio, contador, exibir_resultado):
+
+    altura, largura, _ = frame.shape
+
+    resultado = landmarker.detect_for_video(imagem_np, timestamp)
+
+    #Caso seja necessário acompanhar a identificacão pelos quadros descomente esse trecho:
+    #logger.debug(f"Pessoas detectadas: {len(resultado.pose_landmarks)}")
+
+    if resultado.pose_landmarks:
+
+        pessoa = resultado.pose_landmarks[0]
+        pontos_px = landmarks_p_pixels(pessoa, largura, altura)
+
+        inicio, articulacao, fim = escolher_lado(pessoa, exercicio.pontos_esq, exercicio.pontos_dir)
+
+        angulo_encontrado = calcular_angulo(pontos_px[inicio], pontos_px[articulacao], pontos_px[fim])
+
+        desenhar_esqueleto(frame, pontos_px)
+
+        if angulo_encontrado is not None:
+            desenhar_angulo(frame, pontos_px[articulacao], angulo_encontrado)
+            contador.atualizar(angulo_encontrado)
+
+            if exibir_resultado:
+                desenhar_contador(frame, contador.contador)
+    elif exibir_resultado:
+        desenhar_aviso(frame, "Pessoa nao detectada!!")
 
 if __name__ == "__main__":
 
-    video_path = "videos/FlexaoVideo.mp4"
-    exercicio = EXERCICIOS["flexao"]
+    video_path = "videos/VideoIndicador.mp4"
     cap = cv2.VideoCapture(video_path)
 
     if not validar_video_aberto(cap=cap):
         raise Exception("Erro ao abrir video")
 
 
-    caminho_modelo = validar_pose_landmarker()
+    caminho_modelo_pose = garantir_modelo("pose_landmarker_lite.task", URL_POSE)
+    caminho_modelo_gestos = garantir_modelo("gesture_recognizer.task", URL_GESTOS)
 
     BaseOptions = mp.tasks.BaseOptions
     PoseLandmarker = mp.tasks.vision.PoseLandmarker
     PoseLandmarkerOptions = mp.tasks.vision.PoseLandmarkerOptions
+    GestureRecognizer = mp.tasks.vision.GestureRecognizer
+    GestureRecognizerOptions = mp.tasks.vision.GestureRecognizerOptions
     RunningMode = mp.tasks.vision.RunningMode
 
-    opcoes = PoseLandmarkerOptions(
-        base_options = BaseOptions(model_asset_path=caminho_modelo),
+    opcoes_pose = PoseLandmarkerOptions(
+        base_options = BaseOptions(model_asset_path=caminho_modelo_pose),
         running_mode = RunningMode.VIDEO
     )
 
-    with PoseLandmarker.create_from_options(opcoes) as landmarker:
+    opcoes_gestos = GestureRecognizerOptions(
+        base_options = BaseOptions(model_asset_path=caminho_modelo_gestos),
+        running_mode = RunningMode.VIDEO,
+        num_hands = 1
+    )
 
-        contador = ContadorRepeticoes(exercicio.limiar_baixo, exercicio.limiar_alto)
+    with PoseLandmarker.create_from_options(opcoes_pose) as landmarker, \
+         GestureRecognizer.create_from_options(opcoes_gestos) as reconhecedor:
+
+        if EXERCICIO_FIXO:
+            modo = "exercicio"
+            exercicio = EXERCICIOS[EXERCICIO_FIXO]
+            contador = ContadorRepeticoes(exercicio.limiar_baixo, exercicio.limiar_alto)
+        else:
+            modo = "escolha"
+            exercicio = None
+            contador = None
+
+        confirmador = ConfirmadorGesto()
+        inicio_posicionamento_ms = None
+
         fps = cap.get(cv2.CAP_PROP_FPS)
         indice_do_quadro = 0
 
@@ -74,7 +139,7 @@ if __name__ == "__main__":
             # O (ret) retorna True se o quadro foi capturado e decodificado com sucesso e Falso caso contrario
             # O (frame) contém os dados visuais da imagem atual lida, no OpenCV é representado como uma matriz
             # multidimensional de pixels no espaco de cores BGR (Azul, Verde, Vermelho)
-            ret, frame = cap.read() 
+            ret, frame = cap.read()
 
             if not ret:
                 break
@@ -85,38 +150,66 @@ if __name__ == "__main__":
 
             timestamp = int(indice_do_quadro *1000 / fps)
 
-            resultado = landmarker.detect_for_video(imagem_np, timestamp)
+            if modo == "escolha":
 
-            #Caso seja necessário acompanhar a identificacão pelos quadros descomente esse trecho:
-            #logger.debug(f"Quadro {indice_do_quadro}: {len(resultado.pose_landmarks)} pessoas")
+                resultado_gesto = reconhecedor.recognize_for_video(imagem_np, timestamp)
+                gesto, confianca = extrair_gesto(resultado_gesto)
+                exercicio_escolhido = confirmador.atualizar(gesto, confianca, timestamp)
 
-            altura, largura, _ = frame.shape
+                desenhar_texto_centralizado(frame, "Escolha o exercicio", 0.10)
+                desenhar_texto_centralizado(frame, "1 dedo: agachamento", 0.16)
+                desenhar_texto_centralizado(frame, "2 dedos: flexao", 0.22)
 
-            if resultado.pose_landmarks:
+                if confirmador.gesto_atual:
+                    nome = GESTOS_EXERCICIOS[confirmador.gesto_atual]
+                    desenhar_texto_centralizado(frame, f"{nome}: {confirmador.progresso:.0%}", 0.30, (0, 255, 255))
 
-                pessoa = resultado.pose_landmarks[0]
-                pontos_px = landmarks_p_pixels(pessoa, largura, altura)
-                
-                inicio, articulacao, fim = escolher_lado(pessoa, exercicio.pontos_esq, exercicio.pontos_dir)
+                if exercicio_escolhido:
+                    exercicio = EXERCICIOS[exercicio_escolhido]
+                    contador = ContadorRepeticoes(exercicio.limiar_baixo, exercicio.limiar_alto)
+                    inicio_posicionamento_ms = timestamp
+                    modo = "posicionamento"
+                    logger.info(f"Exercicio escolhido: {exercicio.nome}")
 
-                angulo_encontrado = calcular_angulo(pontos_px[inicio], pontos_px[articulacao], pontos_px[fim])
+            elif modo == "posicionamento":
 
-                desenhar_esqueleto(frame, pontos_px)
+                # A pose ja roda durante a contagem para o contador ver a pessoa em pe antes do inicio
+                processar_pose(landmarker, imagem_np, timestamp, frame, exercicio, contador, exibir_resultado=False)
 
-                if angulo_encontrado is not None:
-                    desenhar_angulo(frame, pontos_px[articulacao], angulo_encontrado)
-                    contador.atualizar(angulo_encontrado)
-                    desenhar_contador(frame, contador.contador)
+                restante = TEMPO_POSICIONAMENTO_S - (timestamp - inicio_posicionamento_ms) / 1000
+
+                if restante <= 0:
+                    contador.zerar_contagem()
+                    modo = "exercicio"
+                else:
+                    desenhar_texto_centralizado(frame, exercicio.nome, 0.10)
+                    desenhar_texto_centralizado(frame, "Posicione-se", 0.20)
+                    desenhar_texto_centralizado(frame, str(math.ceil(restante)), 0.35, (0, 255, 255), 2.5)
+
             else:
-                desenhar_aviso(frame, "Pessoa nao detectada!!")
+
+                processar_pose(landmarker, imagem_np, timestamp, frame, exercicio, contador, exibir_resultado=True)
+
+                desenhar_texto_centralizado(frame, f"Exercicio: {exercicio.nome}", 0.97)
+
+            if modo != "escolha":
+                desenhar_texto_centralizado(frame, "B: trocar exercicio", 0.93)
 
             cv2.imshow("QuadroAtual", frame)
 
-            if cv2.waitKey(1) & 0xFF == ord("q"):
+            tecla = cv2.waitKey(1) & 0xFF
+
+            if tecla == ord("q"):
                 break
+
+            if tecla == ord("b") and modo != "escolha":
+                modo = "escolha"
+                exercicio = None
+                contador = None
+                confirmador = ConfirmadorGesto()
+                logger.info("Voltando para a escolha do exercicio")
 
             indice_do_quadro+=1
 
     cap.release()
     cv2.destroyAllWindows()
-    

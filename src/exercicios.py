@@ -25,6 +25,10 @@ class ContadorRepeticoes:
         self.contador = 0
 
 
+    def zerar_contagem(self):
+        self.contador = 0
+
+
     def atualizar(self, angulo):
 
         if angulo is None:
