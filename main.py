@@ -19,7 +19,7 @@ from src.desenho import (
     desenhar_texto_centralizado,
     landmarks_p_pixels,
 )
-from src.exercicios import EXERCICIOS, ContadorRepeticoes
+from src.exercicios import EXERCICIOS, SessaoExercicio
 from src.gestos import GESTOS_EXERCICIOS, ConfirmadorGesto, extrair_gesto
 
 URL_POSE = "https://storage.googleapis.com/mediapipe-models/pose_landmarker/pose_landmarker_lite/float16/1/pose_landmarker_lite.task"
@@ -57,16 +57,30 @@ def garantir_modelo(nome_arquivo, url) -> str:
 
     return str(caminho_modelo)
 
-def processar_pose(landmarker, imagem_np, timestamp, frame, exercicio, contador, exibir_resultado):
+def processar_pose(landmarker, imagem_np, timestamp, frame, sessao, exibir_resultado):
 
     altura, largura, _ = frame.shape
+    exercicio = sessao.exercicio
 
     resultado = landmarker.detect_for_video(imagem_np, timestamp)
 
     #Caso seja necessário acompanhar a identificacão pelos quadros descomente esse trecho:
     #logger.debug(f"Pessoas detectadas: {len(resultado.pose_landmarks)}")
 
-    if resultado.pose_landmarks:
+    presente = bool(resultado.pose_landmarks)
+
+    estava_pausado = sessao.monitor.pausado
+    voltou = sessao.monitor.atualizar(presente, timestamp)
+
+    if sessao.monitor.pausado and not estava_pausado:
+        logger.info("Pessoa fora do quadro: contagem pausada")
+
+    # Ao voltar de uma pausa, o contador volta a esperar a pessoa em pe, para nao contar uma repeticao que nao viu inteira
+    if voltou:
+        sessao.contador.reiniciar_estado()
+        logger.info("Pessoa de volta: contagem retomada")
+
+    if presente:
 
         pessoa = resultado.pose_landmarks[0]
         pontos_px = landmarks_p_pixels(pessoa, largura, altura)
@@ -78,13 +92,14 @@ def processar_pose(landmarker, imagem_np, timestamp, frame, exercicio, contador,
         desenhar_esqueleto(frame, pontos_px)
 
         if angulo_encontrado is not None:
-            desenhar_angulo(frame, pontos_px[articulacao], angulo_encontrado)
-            contador.atualizar(angulo_encontrado)
-
-            if exibir_resultado:
-                desenhar_contador(frame, contador.contador)
+            angulo_suavizado = sessao.suavizador.suavizar(angulo_encontrado, timestamp)
+            desenhar_angulo(frame, pontos_px[articulacao], angulo_suavizado)
+            sessao.contador.atualizar(angulo_suavizado)
     elif exibir_resultado:
-        desenhar_aviso(frame, "Pessoa nao detectada!!")
+        desenhar_aviso(frame, "Contagem pausada" if sessao.monitor.pausado else "Pessoa nao detectada!!")
+
+    if exibir_resultado:
+        desenhar_contador(frame, sessao.contador.contador)
 
 if __name__ == "__main__":
 
@@ -121,12 +136,10 @@ if __name__ == "__main__":
 
         if EXERCICIO_FIXO:
             modo = "exercicio"
-            exercicio = EXERCICIOS[EXERCICIO_FIXO]
-            contador = ContadorRepeticoes(exercicio.limiar_baixo, exercicio.limiar_alto)
+            sessao = SessaoExercicio(EXERCICIOS[EXERCICIO_FIXO])
         else:
             modo = "escolha"
-            exercicio = None
-            contador = None
+            sessao = None
 
         confirmador = ConfirmadorGesto()
         inicio_posicionamento_ms = None
@@ -165,32 +178,31 @@ if __name__ == "__main__":
                     desenhar_texto_centralizado(frame, f"{nome}: {confirmador.progresso:.0%}", 0.30, (0, 255, 255))
 
                 if exercicio_escolhido:
-                    exercicio = EXERCICIOS[exercicio_escolhido]
-                    contador = ContadorRepeticoes(exercicio.limiar_baixo, exercicio.limiar_alto)
+                    sessao = SessaoExercicio(EXERCICIOS[exercicio_escolhido])
                     inicio_posicionamento_ms = timestamp
                     modo = "posicionamento"
-                    logger.info(f"Exercicio escolhido: {exercicio.nome}")
+                    logger.info(f"Exercicio escolhido: {sessao.exercicio.nome}")
 
             elif modo == "posicionamento":
 
                 # A pose ja roda durante a contagem para o contador ver a pessoa em pe antes do inicio
-                processar_pose(landmarker, imagem_np, timestamp, frame, exercicio, contador, exibir_resultado=False)
+                processar_pose(landmarker, imagem_np, timestamp, frame, sessao, exibir_resultado=False)
 
                 restante = TEMPO_POSICIONAMENTO_S - (timestamp - inicio_posicionamento_ms) / 1000
 
                 if restante <= 0:
-                    contador.zerar_contagem()
+                    sessao.contador.zerar_contagem()
                     modo = "exercicio"
                 else:
-                    desenhar_texto_centralizado(frame, exercicio.nome, 0.10)
+                    desenhar_texto_centralizado(frame, sessao.exercicio.nome, 0.10)
                     desenhar_texto_centralizado(frame, "Posicione-se", 0.20)
                     desenhar_texto_centralizado(frame, str(math.ceil(restante)), 0.35, (0, 255, 255), 2.5)
 
             else:
 
-                processar_pose(landmarker, imagem_np, timestamp, frame, exercicio, contador, exibir_resultado=True)
+                processar_pose(landmarker, imagem_np, timestamp, frame, sessao, exibir_resultado=True)
 
-                desenhar_texto_centralizado(frame, f"Exercicio: {exercicio.nome}", 0.97)
+                desenhar_texto_centralizado(frame, f"Exercicio: {sessao.exercicio.nome}", 0.97)
 
             if modo != "escolha":
                 desenhar_texto_centralizado(frame, "B: trocar exercicio", 0.93)
@@ -204,8 +216,7 @@ if __name__ == "__main__":
 
             if tecla == ord("b") and modo != "escolha":
                 modo = "escolha"
-                exercicio = None
-                contador = None
+                sessao = None
                 confirmador = ConfirmadorGesto()
                 logger.info("Voltando para a escolha do exercicio")
 
