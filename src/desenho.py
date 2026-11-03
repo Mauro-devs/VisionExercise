@@ -84,3 +84,18 @@ def desenhar_contador(frame, repeticoes):
     y = altura_texto + margem
 
     cv2.putText(frame, texto, (x, y), FONTE, escala, COR_LINHA, espessura)
+
+
+def desenhar_texto_centralizado(frame, texto, posicao_vertical, cor=COR_TEXTO_ANGULO, escala_relativa=1.0):
+    altura, largura, _ = frame.shape
+    escala, espessura, _ = _parametros_texto(frame)
+
+    escala *= escala_relativa
+    espessura = max(1, round(espessura * escala_relativa))
+
+    (largura_texto, _), _ = cv2.getTextSize(texto, FONTE, escala, espessura)
+
+    x = max(0, (largura - largura_texto) // 2)
+    y = int(altura * posicao_vertical)
+
+    cv2.putText(frame, texto, (x, y), FONTE, escala, cor, espessura)
