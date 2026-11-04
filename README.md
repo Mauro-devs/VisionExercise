@@ -15,7 +15,7 @@ Projeto de visão computacional que **conta as repetições de agachamento e de 
 | Tecla | O que faz |
 |---|---|
 | `B` | Volta para a escolha do exercício |
-| `A` | Mostra ou esconde o esqueleto (o ângulo e o contador continuam na tela) |
+| `A` | Mostra ou esconde o esqueleto e o ângulo(o contador continuam na tela) |
 | `Q` | Sai do programa |
 
 A janela do vídeo precisa estar em foco para as teclas funcionarem.
