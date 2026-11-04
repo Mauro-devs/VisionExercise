@@ -31,9 +31,7 @@ from src.robustez import validar_corpo
 URL_POSE = "https://storage.googleapis.com/mediapipe-models/pose_landmarker/pose_landmarker_lite/float16/1/pose_landmarker_lite.task"
 URL_GESTOS = "https://storage.googleapis.com/mediapipe-models/gesture_recognizer/gesture_recognizer/float16/1/gesture_recognizer.task"
 
-TEMPO_POSICIONAMENTO_S = 5
-
-PREFIXOS_REDE = ("http://", "https://", "rtsp://")
+TEMPO_POSICIONAMENTO_S = 3
 
 
 def ler_args():
@@ -41,7 +39,7 @@ def ler_args():
     parser = argparse.ArgumentParser(description="Identifica o exercicio (agachamento ou flexao) e conta as repeticoes por visao computacional.")
 
     parser.add_argument("--fonte", default="0",
-                        help="Indice da webcam (ex.: 0), endereco de rede (ex.: http://IP:8080/video) ou caminho de um video. Padrao: 0")
+                        help="Indice da webcam (ex.: 0) ou caminho de um video. Padrao: 0")
     parser.add_argument("--exercicio", choices=list(EXERCICIOS), default=None,
                         help="Pula a escolha por gesto e ja comeca neste exercicio")
     parser.add_argument("--sem-espelho", action="store_true",
@@ -52,13 +50,11 @@ def ler_args():
 
 def abrir_fonte(fonte):
 
-    # Camera local (so digitos, ex.: "0") e endereco de rede (http, rtsp) sao fontes "ao vivo"
-    ao_vivo = fonte.isdigit() or fonte.lower().startswith(PREFIXOS_REDE)
+    # Camera local (so digitos, ex.: "0") e uma fonte "ao vivo": nao tem fim nem fps confiavel
+    ao_vivo = fonte.isdigit()
 
-    if fonte.isdigit():
-        cap = cv2.VideoCapture(int(fonte))
-    else:
-        cap = cv2.VideoCapture(fonte)
+    # A webcam e aberta pelo numero (int) e o video pelo caminho (texto)
+    cap = cv2.VideoCapture(int(fonte) if ao_vivo else fonte)
 
     if ao_vivo:
         # Guarda so o quadro mais recente, para a imagem nao ficar atrasada em relacao a pessoa
