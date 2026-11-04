@@ -17,7 +17,7 @@ class Exercicio:
 
 EXERCICIOS = {
     "agachamento": Exercicio("agachamento", (23, 25, 27), (24, 26, 28), 100, 160,
-                             grupos_corpo=((0,), (11, 12), (23, 24), (25, 26), (27, 28)),
+                             grupos_corpo=((11, 12), (23, 24), (25, 26), (27, 28)),
                              inclinacao_min=0, inclinacao_max=60),
     "flexao": Exercicio("flexao", (11, 13, 15), (12, 14, 16), 110, 150,
                         grupos_corpo=((0,), (11, 12), (23, 24)),
