@@ -88,7 +88,7 @@ def garantir_modelo(nome_arquivo, url) -> str:
 
     return str(caminho_modelo)
 
-def processar_pose(landmarker, mostrar_esqueleto, imagem_np, timestamp, frame, sessao, exibir_resultado):
+def processar_pose(landmarker, mostrar_esqueleto, mostrar_angulo, imagem_np, timestamp, frame, sessao, exibir_resultado):
 
     altura, largura, _ = frame.shape
     exercicio = sessao.exercicio
@@ -131,7 +131,8 @@ def processar_pose(landmarker, mostrar_esqueleto, imagem_np, timestamp, frame, s
 
             if angulo_encontrado is not None:
                 angulo_suavizado = sessao.suavizador.suavizar(angulo_encontrado, timestamp)
-                desenhar_angulo(frame, pontos_px[articulacao], angulo_suavizado)
+                if mostrar_angulo:
+                    desenhar_angulo(frame, pontos_px[articulacao], angulo_suavizado)
                 sessao.contador.atualizar(angulo_suavizado)
         else:
             desenhar_aviso(frame, motivo)
@@ -194,6 +195,7 @@ if __name__ == "__main__":
         espelhar = ao_vivo and not argumentos.sem_espelho
 
         mostrar_esqueleto = True
+        mostrar_angulo = True
 
         while True:
 
@@ -245,7 +247,7 @@ if __name__ == "__main__":
             elif modo == "posicionamento":
 
                 # A pose ja roda durante a contagem para o contador ver a pessoa em pe antes do inicio
-                processar_pose(landmarker, mostrar_esqueleto, imagem_np, timestamp, frame, sessao, exibir_resultado=False)
+                processar_pose(landmarker, mostrar_esqueleto, mostrar_angulo, imagem_np, timestamp, frame, sessao, exibir_resultado=False)
 
                 # Se o corpo ficou fora do quadro ou na postura errada por 1 s, a contagem recomeca quando a pessoa se posicionar
                 if sessao.monitor.pausado:
@@ -263,7 +265,7 @@ if __name__ == "__main__":
 
             else:
 
-                processar_pose(landmarker, mostrar_esqueleto, imagem_np, timestamp, frame, sessao, exibir_resultado=True)
+                processar_pose(landmarker, mostrar_esqueleto, mostrar_angulo, imagem_np, timestamp, frame, sessao, exibir_resultado=True)
 
                 desenhar_texto_centralizado(frame, f"Exercicio: {sessao.exercicio.nome}", 0.97)
 
@@ -286,6 +288,7 @@ if __name__ == "__main__":
 
             if tecla == ord("a"):
                 mostrar_esqueleto = not mostrar_esqueleto
+                mostrar_angulo = not mostrar_angulo
 
             indice_do_quadro+=1
 
