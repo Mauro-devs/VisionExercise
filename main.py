@@ -88,7 +88,7 @@ def garantir_modelo(nome_arquivo, url) -> str:
 
     return str(caminho_modelo)
 
-def processar_pose(landmarker, imagem_np, timestamp, frame, sessao, exibir_resultado):
+def processar_pose(landmarker, mostrar_esqueleto, imagem_np, timestamp, frame, sessao, exibir_resultado):
 
     altura, largura, _ = frame.shape
     exercicio = sessao.exercicio
@@ -121,8 +121,8 @@ def processar_pose(landmarker, imagem_np, timestamp, frame, sessao, exibir_resul
         logger.info("Corpo valido de novo: contagem retomada")
 
     if presente:
-
-        desenhar_esqueleto(frame, pontos_px)
+        if mostrar_esqueleto:
+            desenhar_esqueleto(frame, pontos_px)
 
         if valido:
             inicio, articulacao, fim = escolher_lado(pessoa, exercicio.pontos_esq, exercicio.pontos_dir)
@@ -193,6 +193,8 @@ if __name__ == "__main__":
         ultimo_timestamp = -1
         espelhar = ao_vivo and not argumentos.sem_espelho
 
+        mostrar_esqueleto = True
+
         while True:
 
             # O (ret) retorna True se o quadro foi capturado e decodificado com sucesso e Falso caso contrario
@@ -243,7 +245,7 @@ if __name__ == "__main__":
             elif modo == "posicionamento":
 
                 # A pose ja roda durante a contagem para o contador ver a pessoa em pe antes do inicio
-                processar_pose(landmarker, imagem_np, timestamp, frame, sessao, exibir_resultado=False)
+                processar_pose(landmarker, mostrar_esqueleto, imagem_np, timestamp, frame, sessao, exibir_resultado=False)
 
                 # Se o corpo ficou fora do quadro ou na postura errada por 1 s, a contagem recomeca quando a pessoa se posicionar
                 if sessao.monitor.pausado:
@@ -261,12 +263,13 @@ if __name__ == "__main__":
 
             else:
 
-                processar_pose(landmarker, imagem_np, timestamp, frame, sessao, exibir_resultado=True)
+                processar_pose(landmarker, mostrar_esqueleto, imagem_np, timestamp, frame, sessao, exibir_resultado=True)
 
                 desenhar_texto_centralizado(frame, f"Exercicio: {sessao.exercicio.nome}", 0.97)
 
             if modo != "escolha":
                 desenhar_texto_centralizado(frame, "B: trocar exercicio", 0.93)
+                desenhar_texto_centralizado(frame, "A: esqueleto", 0.89)
 
             cv2.imshow("QuadroAtual", frame)
 
@@ -280,6 +283,9 @@ if __name__ == "__main__":
                 sessao = None
                 confirmador = ConfirmadorGesto()
                 logger.info("Voltando para a escolha do exercicio")
+
+            if tecla == ord("a"):
+                mostrar_esqueleto = not mostrar_esqueleto
 
             indice_do_quadro+=1
 
