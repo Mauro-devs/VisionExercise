@@ -26,6 +26,7 @@ from src.desenho import (
 )
 from src.exercicios import EXERCICIOS, SessaoExercicio
 from src.gestos import GESTOS_EXERCICIOS, ConfirmadorGesto, extrair_gesto
+from src.robustez import validar_corpo
 
 URL_POSE = "https://storage.googleapis.com/mediapipe-models/pose_landmarker/pose_landmarker_lite/float16/1/pose_landmarker_lite.task"
 URL_GESTOS = "https://storage.googleapis.com/mediapipe-models/gesture_recognizer/gesture_recognizer/float16/1/gesture_recognizer.task"
@@ -102,33 +103,42 @@ def processar_pose(landmarker, imagem_np, timestamp, frame, sessao, exibir_resul
     #logger.debug(f"Pessoas detectadas: {len(resultado.pose_landmarks)}")
 
     presente = bool(resultado.pose_landmarks)
+    valido = False
+    motivo = None
+
+    if presente:
+        pessoa = resultado.pose_landmarks[0]
+        pontos_px = landmarks_p_pixels(pessoa, largura, altura)
+
+        # O corpo so conta se estiver inteiro no quadro e na postura do exercicio (evita contar so um braco dobrando)
+        valido, motivo = validar_corpo(pessoa, pontos_px, exercicio)
 
     estava_pausado = sessao.monitor.pausado
-    voltou = sessao.monitor.atualizar(presente, timestamp)
+    voltou = sessao.monitor.atualizar(valido, timestamp)
 
     if sessao.monitor.pausado and not estava_pausado:
-        logger.info("Pessoa fora do quadro: contagem pausada")
+        logger.info("Contagem pausada: corpo fora do quadro ou postura incompativel")
 
     # Ao voltar de uma pausa, o contador volta a esperar a pessoa em pe, para nao contar uma repeticao que nao viu inteira
     if voltou:
         sessao.contador.reiniciar_estado()
-        logger.info("Pessoa de volta: contagem retomada")
+        logger.info("Corpo valido de novo: contagem retomada")
 
     if presente:
 
-        pessoa = resultado.pose_landmarks[0]
-        pontos_px = landmarks_p_pixels(pessoa, largura, altura)
-
-        inicio, articulacao, fim = escolher_lado(pessoa, exercicio.pontos_esq, exercicio.pontos_dir)
-
-        angulo_encontrado = calcular_angulo(pontos_px[inicio], pontos_px[articulacao], pontos_px[fim])
-
         desenhar_esqueleto(frame, pontos_px)
 
-        if angulo_encontrado is not None:
-            angulo_suavizado = sessao.suavizador.suavizar(angulo_encontrado, timestamp)
-            desenhar_angulo(frame, pontos_px[articulacao], angulo_suavizado)
-            sessao.contador.atualizar(angulo_suavizado)
+        if valido:
+            inicio, articulacao, fim = escolher_lado(pessoa, exercicio.pontos_esq, exercicio.pontos_dir)
+
+            angulo_encontrado = calcular_angulo(pontos_px[inicio], pontos_px[articulacao], pontos_px[fim])
+
+            if angulo_encontrado is not None:
+                angulo_suavizado = sessao.suavizador.suavizar(angulo_encontrado, timestamp)
+                desenhar_angulo(frame, pontos_px[articulacao], angulo_suavizado)
+                sessao.contador.atualizar(angulo_suavizado)
+        else:
+            desenhar_aviso(frame, motivo)
     elif exibir_resultado:
         desenhar_aviso(frame, "Contagem pausada" if sessao.monitor.pausado else "Pessoa nao detectada!!")
 
@@ -238,6 +248,10 @@ if __name__ == "__main__":
 
                 # A pose ja roda durante a contagem para o contador ver a pessoa em pe antes do inicio
                 processar_pose(landmarker, imagem_np, timestamp, frame, sessao, exibir_resultado=False)
+
+                # Se o corpo ficou fora do quadro ou na postura errada por 1 s, a contagem recomeca quando a pessoa se posicionar
+                if sessao.monitor.pausado:
+                    inicio_posicionamento_ms = timestamp
 
                 restante = TEMPO_POSICIONAMENTO_S - (timestamp - inicio_posicionamento_ms) / 1000
 

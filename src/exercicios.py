@@ -10,11 +10,18 @@ class Exercicio:
     pontos_dir: tuple
     limiar_baixo: int
     limiar_alto: int
+    grupos_corpo: tuple
+    inclinacao_min: int
+    inclinacao_max: int
 
 
 EXERCICIOS = {
-    "agachamento": Exercicio("agachamento", (23, 25, 27), (24, 26, 28), 100, 160),
-    "flexao": Exercicio("flexao", (11, 13, 15), (12, 14, 16), 110, 150),
+    "agachamento": Exercicio("agachamento", (23, 25, 27), (24, 26, 28), 100, 160,
+                             grupos_corpo=((0,), (11, 12), (23, 24), (25, 26), (27, 28)),
+                             inclinacao_min=0, inclinacao_max=60),
+    "flexao": Exercicio("flexao", (11, 13, 15), (12, 14, 16), 110, 150,
+                        grupos_corpo=((0,), (11, 12), (23, 24)),
+                        inclinacao_min=50, inclinacao_max=90),
 }
 
 
