@@ -1,3 +1,5 @@
+import math
+
 import numpy as np
 
 
@@ -38,3 +40,14 @@ def escolher_lado(pessoa, pontos_esq, pontos_dir):
 
     return pontos_dir
 
+
+def inclinacao_tronco(pontos_px):
+
+    # O tronco e a seta do meio dos ombros (pontos 11 e 12) ate o meio dos quadris (pontos 23 e 24)
+    ombro_x = (pontos_px[11][0] + pontos_px[12][0]) / 2
+    ombro_y = (pontos_px[11][1] + pontos_px[12][1]) / 2
+    quadril_x = (pontos_px[23][0] + pontos_px[24][0]) / 2
+    quadril_y = (pontos_px[23][1] + pontos_px[24][1]) / 2
+
+    # 0 graus = tronco na vertical (em pe), 90 graus = tronco na horizontal (deitado)
+    return math.degrees(math.atan2(abs(quadril_x - ombro_x), abs(quadril_y - ombro_y)))

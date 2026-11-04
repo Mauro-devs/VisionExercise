@@ -1,9 +1,14 @@
 # Execução (a partir da raiz do projeto):
-#   uv run python main.py
+#   uv run python main.py                                          (webcam de índice 0)
+#   uv run python main.py --fonte 1                                (outra webcam)
+#   uv run python main.py --fonte videos/AgachamentoVideo.mp4 --exercicio agachamento
+# Uso: faça o gesto para escolher o exercício (1 dedo = agachamento, 2 dedos = flexão), afaste-se e comece.
+# Teclas: B troca o exercício, Q sai (a janela do vídeo precisa estar em foco).
 # Modelos: Pose Landmarker (lite) e Gesture Recognizer, do Google MediaPipe, baixados na primeira execução.
-
+import argparse
 import math
 import pathlib
+import time
 from urllib import request
 
 import cv2
@@ -21,15 +26,41 @@ from src.desenho import (
 )
 from src.exercicios import EXERCICIOS, SessaoExercicio
 from src.gestos import GESTOS_EXERCICIOS, ConfirmadorGesto, extrair_gesto
+from src.robustez import validar_corpo
 
 URL_POSE = "https://storage.googleapis.com/mediapipe-models/pose_landmarker/pose_landmarker_lite/float16/1/pose_landmarker_lite.task"
 URL_GESTOS = "https://storage.googleapis.com/mediapipe-models/gesture_recognizer/gesture_recognizer/float16/1/gesture_recognizer.task"
 
-TEMPO_POSICIONAMENTO_S = 5
+TEMPO_POSICIONAMENTO_S = 3
 
-# Para pular a escolha por gesto durante os testes, use "agachamento" ou "flexao". Em uso normal, deixe None.
-EXERCICIO_FIXO = None
 
+def ler_args():
+
+    parser = argparse.ArgumentParser(description="Identifica o exercicio (agachamento ou flexao) e conta as repeticoes por visao computacional.")
+
+    parser.add_argument("--fonte", default="0",
+                        help="Indice da webcam (ex.: 0) ou caminho de um video. Padrao: 0")
+    parser.add_argument("--exercicio", choices=list(EXERCICIOS), default=None,
+                        help="Pula a escolha por gesto e ja comeca neste exercicio")
+    parser.add_argument("--sem-espelho", action="store_true",
+                        help="Nao espelha a imagem de camera (por padrao, camera e espelhada)")
+
+    return parser.parse_args()
+
+
+def abrir_fonte(fonte):
+
+    # Camera local (so digitos, ex.: "0") e uma fonte "ao vivo": nao tem fim nem fps confiavel
+    ao_vivo = fonte.isdigit()
+
+    # A webcam e aberta pelo numero (int) e o video pelo caminho (texto)
+    cap = cv2.VideoCapture(int(fonte) if ao_vivo else fonte)
+
+    if ao_vivo:
+        # Guarda so o quadro mais recente, para a imagem nao ficar atrasada em relacao a pessoa
+        cap.set(cv2.CAP_PROP_BUFFERSIZE, 1)
+
+    return cap, ao_vivo
 
 def validar_video_aberto(cap) -> bool:
 
@@ -57,7 +88,7 @@ def garantir_modelo(nome_arquivo, url) -> str:
 
     return str(caminho_modelo)
 
-def processar_pose(landmarker, imagem_np, timestamp, frame, sessao, exibir_resultado):
+def processar_pose(landmarker, mostrar_esqueleto, imagem_np, timestamp, frame, sessao, exibir_resultado):
 
     altura, largura, _ = frame.shape
     exercicio = sessao.exercicio
@@ -68,33 +99,42 @@ def processar_pose(landmarker, imagem_np, timestamp, frame, sessao, exibir_resul
     #logger.debug(f"Pessoas detectadas: {len(resultado.pose_landmarks)}")
 
     presente = bool(resultado.pose_landmarks)
+    valido = False
+    motivo = None
+
+    if presente:
+        pessoa = resultado.pose_landmarks[0]
+        pontos_px = landmarks_p_pixels(pessoa, largura, altura)
+
+        # O corpo so conta se estiver inteiro no quadro e na postura do exercicio (evita contar so um braco dobrando)
+        valido, motivo = validar_corpo(pessoa, pontos_px, exercicio)
 
     estava_pausado = sessao.monitor.pausado
-    voltou = sessao.monitor.atualizar(presente, timestamp)
+    voltou = sessao.monitor.atualizar(valido, timestamp)
 
     if sessao.monitor.pausado and not estava_pausado:
-        logger.info("Pessoa fora do quadro: contagem pausada")
+        logger.info("Contagem pausada: corpo fora do quadro ou postura incompativel")
 
     # Ao voltar de uma pausa, o contador volta a esperar a pessoa em pe, para nao contar uma repeticao que nao viu inteira
     if voltou:
         sessao.contador.reiniciar_estado()
-        logger.info("Pessoa de volta: contagem retomada")
+        logger.info("Corpo valido de novo: contagem retomada")
 
     if presente:
+        if mostrar_esqueleto:
+            desenhar_esqueleto(frame, pontos_px)
 
-        pessoa = resultado.pose_landmarks[0]
-        pontos_px = landmarks_p_pixels(pessoa, largura, altura)
+        if valido:
+            inicio, articulacao, fim = escolher_lado(pessoa, exercicio.pontos_esq, exercicio.pontos_dir)
 
-        inicio, articulacao, fim = escolher_lado(pessoa, exercicio.pontos_esq, exercicio.pontos_dir)
+            angulo_encontrado = calcular_angulo(pontos_px[inicio], pontos_px[articulacao], pontos_px[fim])
 
-        angulo_encontrado = calcular_angulo(pontos_px[inicio], pontos_px[articulacao], pontos_px[fim])
-
-        desenhar_esqueleto(frame, pontos_px)
-
-        if angulo_encontrado is not None:
-            angulo_suavizado = sessao.suavizador.suavizar(angulo_encontrado, timestamp)
-            desenhar_angulo(frame, pontos_px[articulacao], angulo_suavizado)
-            sessao.contador.atualizar(angulo_suavizado)
+            if angulo_encontrado is not None:
+                angulo_suavizado = sessao.suavizador.suavizar(angulo_encontrado, timestamp)
+                desenhar_angulo(frame, pontos_px[articulacao], angulo_suavizado)
+                sessao.contador.atualizar(angulo_suavizado)
+        else:
+            desenhar_aviso(frame, motivo)
     elif exibir_resultado:
         desenhar_aviso(frame, "Contagem pausada" if sessao.monitor.pausado else "Pessoa nao detectada!!")
 
@@ -103,11 +143,14 @@ def processar_pose(landmarker, imagem_np, timestamp, frame, sessao, exibir_resul
 
 if __name__ == "__main__":
 
-    video_path = "videos/VideoIndicador.mp4"
-    cap = cv2.VideoCapture(video_path)
+    argumentos = ler_args()
+    cap, ao_vivo = abrir_fonte(argumentos.fonte)
 
     if not validar_video_aberto(cap=cap):
-        raise Exception("Erro ao abrir video")
+        raise SystemExit(f"Nao foi possivel abrir a fonte '{argumentos.fonte}'.\n"
+                         "- Webcam: confira se ela esta conectada e nao esta em uso por outro programa; "
+                         "se houver mais de uma, tente --fonte 1.\n"
+                         "- Video: passe o caminho do arquivo, ex.: --fonte videos/AgachamentoVideo.mp4.")
 
 
     caminho_modelo_pose = garantir_modelo("pose_landmarker_lite.task", URL_POSE)
@@ -134,9 +177,9 @@ if __name__ == "__main__":
     with PoseLandmarker.create_from_options(opcoes_pose) as landmarker, \
          GestureRecognizer.create_from_options(opcoes_gestos) as reconhecedor:
 
-        if EXERCICIO_FIXO:
+        if argumentos.exercicio:
             modo = "exercicio"
-            sessao = SessaoExercicio(EXERCICIOS[EXERCICIO_FIXO])
+            sessao = SessaoExercicio(EXERCICIOS[argumentos.exercicio])
         else:
             modo = "escolha"
             sessao = None
@@ -144,8 +187,13 @@ if __name__ == "__main__":
         confirmador = ConfirmadorGesto()
         inicio_posicionamento_ms = None
 
-        fps = cap.get(cv2.CAP_PROP_FPS)
+        fps = cap.get(cv2.CAP_PROP_FPS) or 30
         indice_do_quadro = 0
+        inicio_relogio = time.monotonic()
+        ultimo_timestamp = -1
+        espelhar = ao_vivo and not argumentos.sem_espelho
+
+        mostrar_esqueleto = True
 
         while True:
 
@@ -155,13 +203,24 @@ if __name__ == "__main__":
             ret, frame = cap.read()
 
             if not ret:
+                if ao_vivo:
+                    logger.warning("A camera parou de enviar imagem")
                 break
+
+            if espelhar:
+                frame = cv2.flip(frame, 1)
 
             imagem = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
 
             imagem_np = mp.Image(image_format=mp.ImageFormat.SRGB, data=imagem)
 
-            timestamp = int(indice_do_quadro *1000 / fps)
+            if ao_vivo:
+                timestamp = int((time.monotonic() - inicio_relogio) * 1000)
+            else:
+                timestamp = int(indice_do_quadro * 1000 / fps)
+
+            timestamp = max(timestamp, ultimo_timestamp + 1)
+            ultimo_timestamp = timestamp
 
             if modo == "escolha":
 
@@ -186,7 +245,11 @@ if __name__ == "__main__":
             elif modo == "posicionamento":
 
                 # A pose ja roda durante a contagem para o contador ver a pessoa em pe antes do inicio
-                processar_pose(landmarker, imagem_np, timestamp, frame, sessao, exibir_resultado=False)
+                processar_pose(landmarker, mostrar_esqueleto, imagem_np, timestamp, frame, sessao, exibir_resultado=False)
+
+                # Se o corpo ficou fora do quadro ou na postura errada por 1 s, a contagem recomeca quando a pessoa se posicionar
+                if sessao.monitor.pausado:
+                    inicio_posicionamento_ms = timestamp
 
                 restante = TEMPO_POSICIONAMENTO_S - (timestamp - inicio_posicionamento_ms) / 1000
 
@@ -200,12 +263,13 @@ if __name__ == "__main__":
 
             else:
 
-                processar_pose(landmarker, imagem_np, timestamp, frame, sessao, exibir_resultado=True)
+                processar_pose(landmarker, mostrar_esqueleto, imagem_np, timestamp, frame, sessao, exibir_resultado=True)
 
                 desenhar_texto_centralizado(frame, f"Exercicio: {sessao.exercicio.nome}", 0.97)
 
             if modo != "escolha":
                 desenhar_texto_centralizado(frame, "B: trocar exercicio", 0.93)
+                desenhar_texto_centralizado(frame, "A: esqueleto", 0.89)
 
             cv2.imshow("QuadroAtual", frame)
 
@@ -219,6 +283,9 @@ if __name__ == "__main__":
                 sessao = None
                 confirmador = ConfirmadorGesto()
                 logger.info("Voltando para a escolha do exercicio")
+
+            if tecla == ord("a"):
+                mostrar_esqueleto = not mostrar_esqueleto
 
             indice_do_quadro+=1
 

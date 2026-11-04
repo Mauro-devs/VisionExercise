@@ -1,43 +1,100 @@
 # VisionExercise
 
-Projeto de visão computacional que **identifica automaticamente qual exercício físico está sendo feito** (flexão ou agachamento) e **conta as repetições** em tempo real.
+Projeto de visão computacional que **conta as repetições de agachamento e de flexão** em tempo real, a partir da webcam ou de um vídeo. O exercício é escolhido por **gesto de mão**, e o programa só conta quando o corpo está inteiro no quadro e na postura certa.
 
-## Objetivo
+## Como funciona
 
-Dado um vídeo ou a webcam, o sistema deve:
+1. **Escolha do exercício.** Com a mão perto da câmera, faça o gesto e segure por cerca de 1 segundo:
+   - **1 dedo** (só o indicador levantado): agachamento.
+   - **2 dedos** (indicador e médio, o "V"): flexão.
+2. **Posicionamento.** Aparece uma contagem regressiva de 3 segundos. Afaste-se e fique de lado para a câmera, com o corpo inteiro visível. A contagem só avança enquanto o corpo estiver válido.
+3. **Exercício.** O programa mostra o esqueleto, o ângulo da articulação e o contador de repetições.
 
-1. Detectar a pessoa e extrair os pontos do corpo (pose).
-2. Identificar qual exercício está sendo executado.
-3. Contar as repetições completas desse exercício.
-4. Exibir o resultado na tela (exercício detectado + contagem).
+### Teclas
 
-Exemplo: a pessoa começa a fazer flexões, o sistema mostra "Flexão" e incrementa o contador a cada repetição. Se ela passa a fazer agachamentos, o sistema troca para "Agachamento" e conta as novas repetições.
+| Tecla | O que faz |
+|---|---|
+| `B` | Volta para a escolha do exercício |
+| `A` | Mostra ou esconde o esqueleto (o ângulo e o contador continuam na tela) |
+| `Q` | Sai do programa |
 
-## Como vai funcionar
+A janela do vídeo precisa estar em foco para as teclas funcionarem.
 
-- **Pose:** um modelo pré-treinado (MediaPipe Pose) extrai os pontos do corpo, como ombros, cotovelos, quadris, joelhos e tornozelos.
-- **Ângulos:** a partir desses pontos, calcula-se o ângulo das articulações relevantes (joelho no agachamento, cotovelo na flexão).
-- **Identificação:** o exercício é reconhecido pela posição do corpo (em pé ou horizontal) e pela articulação que mais se movimenta.
-- **Contagem:** cada repetição completa (descer e voltar à posição inicial) soma 1 ao contador.
+## Como rodar
+
+**Requisitos:** Python 3.10 ou mais novo e o [`uv`](https://docs.astral.sh/uv/).
+
+```bash
+git clone <endereço do repositório>
+cd VisionExercise
+uv sync
+uv run python main.py
+```
+
+Na **primeira execução**, o programa baixa sozinho os dois modelos do MediaPipe (cerca de 14 MB no total), o que leva alguns segundos.
+
+### Opções
+
+| Opção | O que faz |
+|---|---|
+| `--fonte 0` | Webcam de índice 0 (padrão). Use `--fonte 1`, `--fonte 2`... se houver mais de uma câmera |
+| `--fonte caminho/do/video.mp4` | Usa um arquivo de vídeo em vez da webcam |
+| `--exercicio agachamento` ou `--exercicio flexao` | Pula a escolha por gesto e já começa no exercício |
+| `--sem-espelho` | Não espelha a imagem da webcam (por padrão ela é espelhada) |
+
+Exemplos:
+
+```bash
+uv run python main.py
+uv run python main.py --fonte 1
+uv run python main.py --fonte videos/meu_video.mp4 --exercicio agachamento
+uv run python main.py --help
+```
+
+A pasta `videos/` está vazia no repositório: para usar um vídeo, coloque o arquivo nela (ou passe qualquer caminho em `--fonte`).
+
+## Requisitos de uso
+
+- Câmera preferencialmente de **lado** (perfil), para facilitar a medição dos ângulos.
+- **Uma pessoa** na cena, com boa iluminação.
+- O que precisa aparecer inteiro no quadro:
+  - **Agachamento:** ombros, quadris, joelhos e tornozelos.
+  - **Flexão:** cabeça, ombros e quadris (os pés não são exigidos).
+- O tronco precisa estar na postura do exercício: em pé ou inclinado para frente no agachamento, e na horizontal na flexão. Isso impede, por exemplo, que dobrar só o braço em pé seja contado como flexão.
+
+## Como a contagem é feita
+
+| Exercício | Articulação medida | A repetição conta quando o ângulo... |
+|---|---|---|
+| Agachamento | Joelho (quadril, joelho, tornozelo) | cai abaixo de **100°** e volta a passar de **160°** |
+| Flexão | Cotovelo (ombro, cotovelo, punho) | cai abaixo de **110°** e volta a passar de **150°** |
+
+- O programa usa o **lado do corpo mais visível** para a câmera.
+- O ângulo passa por uma média de 150 ms para reduzir o tremor.
+- Se a pessoa sair do quadro ou da postura por **1 segundo**, a contagem é **pausada**. Ao voltar, o total é mantido, mas a repetição que ficou incompleta não é contada.
 
 ## Escopo
 
 **Incluído**
 - Exercícios: flexão e agachamento.
-- Entrada por webcam e/ou arquivo de vídeo.
-- Exibição do esqueleto, do nome do exercício e do contador sobre o vídeo.
+- Entrada por webcam ou arquivo de vídeo.
+- Escolha do exercício por gesto de mão.
+- Esqueleto, ângulo, nome do exercício e contador sobre o vídeo.
 
 **Fora do escopo (por enquanto)**
 - Correção de postura e avaliação da qualidade do movimento.
 - Mais de uma pessoa na cena.
 - Outros exercícios.
 
-## Requisitos de uso
-- Câmera preferencialmente de **lado** (perfil), para facilitar a medição dos ângulos.
-- Corpo inteiro visível e boa iluminação.
+## Limitações conhecidas
 
-## Tecnologias previstas
+- Os limites de ângulo foram ajustados com **poucos vídeos**, de uma pessoa em cada exercício. Em outra pessoa ou ângulo de câmera, uma repetição mais rasa pode não contar.
+- O reconhecimento dos gestos foi validado com uma pessoa.
+- Com o corpo muito parcial no quadro, o modelo de pose pode "inventar" pontos que não vê, e a validação nem sempre bloqueia esse caso.
+
+## Tecnologias
+
 - Python 3
 - OpenCV
-- MediaPipe
+- MediaPipe (Pose Landmarker e Gesture Recognizer)
 - NumPy
