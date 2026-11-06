@@ -19,9 +19,9 @@ def garantir_modelo(nome_arquivo, url) -> str:
         logger.info(f"Baixando o modelo {nome_arquivo}...")
         request.urlretrieve(url, caminho_modelo)
 
-        logger.info(f"Modelo {nome_arquivo} importado com sucesso!")
+        logger.info(f"Modelo {nome_arquivo} baixado com sucesso")
     else:
-        logger.info(f"Modelo {nome_arquivo} já importado anteriormente, não necessário nova importacão")
+        logger.info(f"Modelo {nome_arquivo} ja existe em models/, download nao necessario")
 
     return str(caminho_modelo)
 

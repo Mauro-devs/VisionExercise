@@ -11,13 +11,13 @@ def abrir_fonte(fonte):
     cap = cv2.VideoCapture(int(fonte) if ao_vivo else fonte)
 
     if not cap.isOpened():
-        logger.info("Falha ao abrir video")
+        logger.error(f"Falha ao abrir a fonte '{fonte}'")
         raise SystemExit(f"Nao foi possivel abrir a fonte '{fonte}'.\n"
                          "- Webcam: confira se ela esta conectada e nao esta em uso por outro programa; "
                          "se houver mais de uma, tente --fonte 1.\n"
                          "- Video: passe o caminho do arquivo, ex.: --fonte videos/AgachamentoVideo.mp4.")
 
-    logger.info("Video acessado corretamente")
+    logger.info(f"Fonte '{fonte}' aberta ({'webcam' if ao_vivo else 'arquivo de video'})")
 
     if ao_vivo:
         # Guarda so o quadro mais recente, para a imagem nao ficar atrasada em relacao a pessoa
