@@ -1,31 +1,23 @@
 import cv2
 import mediapipe as mp
 
-PoseLandmarksConnections = mp.tasks.vision.PoseLandmarksConnections
-
-COR_LINHA = (0, 255, 0)
-COR_PONTO = (0, 255, 0)
-COR_AVISO = (0, 0, 255)
-COR_TEXTO_ANGULO = (255, 255, 255)
-COR_CONTORNO = (0, 0, 0)
-
-ESPESSURA_LINHA = 2
-RAIO_PONTO = 5
+# Cores em BGR (o padrao do OpenCV)
+VERDE = (0, 255, 0)
+VERMELHO = (0, 0, 255)
+BRANCO = (255, 255, 255)
+PRETO = (0, 0, 0)
 
 FONTE = cv2.FONT_HERSHEY_SIMPLEX
-LADO_REFERENCIA = 832
-ESCALA_REFERENCIA = 0.7
-ESCALA_MINIMA = 0.5
-MARGEM_PROPORCIONAL = 0.03
 
 
 def _parametros_texto(frame):
     altura, largura, _ = frame.shape
     lado_maior = max(altura, largura)
 
-    escala = max(ESCALA_MINIMA, lado_maior / LADO_REFERENCIA * ESCALA_REFERENCIA)
+    # O texto cresce proporcionalmente a imagem: escala 0.7 para um lado maior de 832 px, com minimo de 0.5
+    escala = max(0.5, lado_maior / 832 * 0.7)
     espessura = max(1, round(escala * 2.5))
-    margem = int(largura * MARGEM_PROPORCIONAL)
+    margem = int(largura * 0.03)
 
     return escala, espessura, margem
 
@@ -37,7 +29,7 @@ def _escrever_texto(frame, texto, posicao, escala, cor, espessura):
     for dx in (-deslocamento, 0, deslocamento):
         for dy in (-deslocamento, 0, deslocamento):
             if dx or dy:
-                cv2.putText(frame, texto, (x + dx, y + dy), FONTE, escala, COR_CONTORNO, espessura, cv2.LINE_AA)
+                cv2.putText(frame, texto, (x + dx, y + dy), FONTE, escala, PRETO, espessura, cv2.LINE_AA)
 
     cv2.putText(frame, texto, posicao, FONTE, escala, cor, espessura, cv2.LINE_AA)
 
@@ -53,13 +45,13 @@ def landmarks_p_pixels(pessoa, largura, altura):
     return pontos_px
 
 def desenhar_esqueleto(frame, pontos_px):
-    for conexao in PoseLandmarksConnections.POSE_LANDMARKS:
+    for conexao in mp.tasks.vision.PoseLandmarksConnections.POSE_LANDMARKS:
         inicio = pontos_px[conexao.start]
         fim = pontos_px[conexao.end]
-        cv2.line(frame, inicio, fim, COR_LINHA, ESPESSURA_LINHA)
+        cv2.line(frame, inicio, fim, VERDE, 2)
 
     for px, py in pontos_px:
-        cv2.circle(frame, (px, py), RAIO_PONTO, COR_PONTO, -1)
+        cv2.circle(frame, (px, py), 5, VERDE, -1)
 
 
 def desenhar_aviso(frame, texto):
@@ -69,7 +61,7 @@ def desenhar_aviso(frame, texto):
     x = margem
     y = altura_texto + margem
 
-    _escrever_texto(frame, texto, (x, y), escala, COR_AVISO, espessura)
+    _escrever_texto(frame, texto, (x, y), escala, VERMELHO, espessura)
 
 
 def desenhar_angulo(frame, pontopx, angulo):
@@ -83,7 +75,7 @@ def desenhar_angulo(frame, pontopx, angulo):
     x = max(margem, min(px, largura - largura_texto - margem))
     y = max(altura_texto + margem, min(py, altura - margem))
 
-    _escrever_texto(frame, texto, (x, y), escala, COR_TEXTO_ANGULO, espessura)
+    _escrever_texto(frame, texto, (x, y), escala, BRANCO, espessura)
 
 
 def desenhar_contador(frame, repeticoes):
@@ -96,10 +88,10 @@ def desenhar_contador(frame, repeticoes):
     x = largura - largura_texto - margem
     y = altura_texto + margem
 
-    _escrever_texto(frame, texto, (x, y), escala, COR_LINHA, espessura)
+    _escrever_texto(frame, texto, (x, y), escala, VERDE, espessura)
 
 
-def desenhar_texto_centralizado(frame, texto, posicao_vertical, cor=COR_TEXTO_ANGULO, escala_relativa=1.0):
+def desenhar_texto_centralizado(frame, texto, posicao_vertical, cor=BRANCO, escala_relativa=1.0):
     altura, largura, _ = frame.shape
     escala, espessura, _ = _parametros_texto(frame)
 

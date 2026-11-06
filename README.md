@@ -15,7 +15,7 @@ Projeto de visão computacional que **conta as repetições de agachamento e de 
 | Tecla | O que faz |
 |---|---|
 | `B` | Volta para a escolha do exercício |
-| `A` | Mostra ou esconde o esqueleto e o ângulo(o contador continuam na tela) |
+| `A` | Mostra ou esconde o esqueleto e o ângulo (o contador continua na tela) |
 | `Q` | Sai do programa |
 
 A janela do vídeo precisa estar em foco para as teclas funcionarem.
@@ -81,7 +81,7 @@ A pasta `videos/` está vazia no repositório: para usar um vídeo, coloque o ar
 - Escolha do exercício por gesto de mão.
 - Esqueleto, ângulo, nome do exercício e contador sobre o vídeo.
 
-**Fora do escopo (por enquanto)**
+**Implementação futura**
 - Correção de postura e avaliação da qualidade do movimento.
 - Mais de uma pessoa na cena.
 - Outros exercícios.
@@ -91,6 +91,27 @@ A pasta `videos/` está vazia no repositório: para usar um vídeo, coloque o ar
 - Os limites de ângulo foram ajustados com **poucos vídeos**, de uma pessoa em cada exercício. Em outra pessoa ou ângulo de câmera, uma repetição mais rasa pode não contar.
 - O reconhecimento dos gestos foi validado com uma pessoa.
 - Com o corpo muito parcial no quadro, o modelo de pose pode "inventar" pontos que não vê, e a validação nem sempre bloqueia esse caso.
+
+## Estrutura do projeto
+
+```
+main.py                  ponto de entrada: só chama executar()
+src/
+  app.py                 executar() (monta tudo e roda o loop) e a classe App (um método por modo)
+  cli.py                 argumentos de linha de comando
+  fonte.py               abre a webcam ou o vídeo
+  pose.py                detecta a pose, valida o corpo, calcula o ângulo e desenha
+  modelos/carregar.py    baixa os modelos do MediaPipe e monta as opções
+  gestos.py              reconhece e confirma o gesto de escolha
+  exercicios.py          definição dos exercícios e contador de repetições
+  robustez.py            validação do corpo, pausa e suavização do ângulo
+  angulos.py             cálculo de ângulos
+  desenho.py             esqueleto, textos e contador sobre a imagem
+models/                  modelos baixados na primeira execução
+videos/                  vídeos de teste
+```
+
+O programa tem três modos, tratados pela classe `App`: **escolha** (gesto), **posicionamento** (contagem regressiva) e **exercício** (contagem de repetições).
 
 ## Tecnologias
 
