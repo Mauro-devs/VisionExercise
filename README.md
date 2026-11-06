@@ -81,7 +81,7 @@ A pasta `videos/` está vazia no repositório: para usar um vídeo, coloque o ar
 - Escolha do exercício por gesto de mão.
 - Esqueleto, ângulo, nome do exercício e contador sobre o vídeo.
 
-**Fora do escopo (por enquanto)**
+**Implementação futura**
 - Correção de postura e avaliação da qualidade do movimento.
 - Mais de uma pessoa na cena.
 - Outros exercícios.
