@@ -5,9 +5,6 @@ GESTOS_EXERCICIOS = {
     "Victory": "flexao",
 }
 
-CONFIANCA_MINIMA = 0.6
-TEMPO_CONFIRMACAO_S = 1.0
-
 
 def extrair_gesto(resultado):
     if not resultado.gestures:
@@ -19,7 +16,7 @@ def extrair_gesto(resultado):
 
 class ConfirmadorGesto:
 
-    def __init__(self, tempo_confirmacao_s=TEMPO_CONFIRMACAO_S, confianca_minima=CONFIANCA_MINIMA):
+    def __init__(self, tempo_confirmacao_s=1.0, confianca_minima=0.6):
         self.tempo_confirmacao_ms = tempo_confirmacao_s * 1000
         self.confianca_minima = confianca_minima
         self.gesto_atual = None

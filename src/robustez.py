@@ -2,15 +2,10 @@ from collections import deque
 
 from src.angulos import inclinacao_tronco
 
-TOLERANCIA_AUSENCIA_S = 1.0
-JANELA_SUAVIZACAO_MS = 150
-MARGEM_QUADRO = 0.02
-VISIBILIDADE_MINIMA = 0.5
-
 
 class MonitorPresenca:
 
-    def __init__(self, tolerancia_s=TOLERANCIA_AUSENCIA_S):
+    def __init__(self, tolerancia_s=1.0):
         self.tolerancia_ms = tolerancia_s * 1000
         self.ausente_desde_ms = None
         self.pausado = False
@@ -34,7 +29,7 @@ class MonitorPresenca:
 
 class SuavizadorAngulo:
 
-    def __init__(self, janela_ms=JANELA_SUAVIZACAO_MS):
+    def __init__(self, janela_ms=150):
         self.janela_ms = janela_ms
         self.amostras = deque()
 
@@ -50,9 +45,10 @@ class SuavizadorAngulo:
 
 def _ponto_aproveitavel(ponto):
     # A visibilidade sozinha nao basta: o modelo da confianca alta ate para pontos que ele inventa fora da imagem
-    dentro_do_quadro = MARGEM_QUADRO <= ponto.x <= 1 - MARGEM_QUADRO and MARGEM_QUADRO <= ponto.y <= 1 - MARGEM_QUADRO
+    margem_quadro = 0.02
+    dentro_do_quadro = margem_quadro <= ponto.x <= 1 - margem_quadro and margem_quadro <= ponto.y <= 1 - margem_quadro
 
-    return dentro_do_quadro and ponto.visibility >= VISIBILIDADE_MINIMA
+    return dentro_do_quadro and ponto.visibility >= 0.5
 
 
 def validar_corpo(pessoa, pontos_px, exercicio):
